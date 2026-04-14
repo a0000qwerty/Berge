@@ -1,0 +1,216 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap');
+
+html, body, [class*="css"] {
+    font-family: 'IBM Plex Sans', sans-serif;
+}
+
+/* Fondo general */
+.stApp {
+    background-color: #0d1117;
+    color: #e6edf3;
+}
+
+/* Header principal */
+.main-header {
+    border-bottom: 1px solid #21262d;
+    padding-bottom: 1.2rem;
+    margin-bottom: 2rem;
+}
+
+.main-header h1 {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 1.6rem;
+    font-weight: 600;
+    color: #58a6ff;
+    letter-spacing: -0.02em;
+    margin: 0;
+}
+
+.main-header p {
+    font-size: 0.85rem;
+    color: #8b949e;
+    margin: 0.3rem 0 0 0;
+    font-weight: 300;
+}
+
+/* Secciones */
+.section-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #58a6ff;
+    border-left: 3px solid #58a6ff;
+    padding-left: 0.6rem;
+    margin-bottom: 1rem;
+    margin-top: 0.5rem;
+}
+
+/* Inputs de Streamlit */
+[data-testid="stNumberInput"] label,
+[data-testid="stSelectbox"] label,
+[data-testid="stMultiSelect"] label,
+[data-testid="stSlider"] label {
+    font-size: 0.78rem !important;
+    font-weight: 600 !important;
+    color: #8b949e !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.06em !important;
+}
+
+[data-testid="stNumberInput"] input,
+[data-testid="stTextInput"] input {
+    background-color: #161b22 !important;
+    border: 1px solid #30363d !important;
+    border-radius: 6px !important;
+    color: #e6edf3 !important;
+    font-family: 'IBM Plex Mono', monospace !important;
+}
+
+[data-testid="stNumberInput"] input:focus,
+[data-testid="stTextInput"] input:focus {
+    border-color: #58a6ff !important;
+    box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.1) !important;
+}
+
+/* Separador de items */
+.item-row {
+    background: #161b22;
+    border: 1px solid #21262d;
+    border-radius: 8px;
+    padding: 0.8rem 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.item-index {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.65rem;
+    color: #58a6ff;
+    font-weight: 600;
+    margin-bottom: 0.3rem;
+}
+
+/* Botones */
+.stButton > button {
+    background-color: #21262d !important;
+    border: 1px solid #30363d !important;
+    color: #e6edf3 !important;
+    font-family: 'IBM Plex Mono', monospace !important;
+    font-size: 0.75rem !important;
+    font-weight: 600 !important;
+    border-radius: 6px !important;
+    padding: 0.4rem 1rem !important;
+    transition: all 0.15s ease !important;
+}
+
+.stButton > button:hover {
+    background-color: #30363d !important;
+    border-color: #58a6ff !important;
+    color: #58a6ff !important;
+}
+
+/* Botón eliminar */
+.delete-btn > button {
+    background-color: transparent !important;
+    border: 1px solid #30363d !important;
+    color: #f85149 !important;
+    font-size: 0.75rem !important;
+    padding: 0.3rem 0.6rem !important;
+}
+
+.delete-btn > button:hover {
+    border-color: #f85149 !important;
+    background-color: rgba(248, 81, 73, 0.1) !important;
+}
+
+/* Resumen lateral */
+.summary-box {
+    background: #161b22;
+    border: 1px solid #21262d;
+    border-radius: 8px;
+    padding: 1.2rem;
+    margin-bottom: 1rem;
+}
+
+.summary-title {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #8b949e;
+    margin-bottom: 0.8rem;
+}
+
+.summary-value {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 1.4rem;
+    font-weight: 600;
+    color: #3fb950;
+}
+
+.summary-label {
+    font-size: 0.75rem;
+    color: #8b949e;
+    margin-top: 0.2rem;
+}
+
+/* Slider */
+[data-testid="stSlider"] {
+    padding-top: 0.5rem;
+}
+
+/* Divider */
+hr {
+    border-color: #21262d !important;
+    margin: 1.5rem 0 !important;
+}
+
+/* Selectbox */
+[data-testid="stSelectbox"] > div > div {
+    background-color: #161b22 !important;
+    border-color: #30363d !important;
+    color: #e6edf3 !important;
+}
+
+/* Multiselect */
+[data-testid="stMultiSelect"] > div > div {
+    background-color: #161b22 !important;
+    border-color: #30363d !important;
+}
+
+/* Metric cards */
+.metric-card {
+    background: #161b22;
+    border: 1px solid #21262d;
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+    text-align: center;
+}
+
+.metric-card .value {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 1.6rem;
+    font-weight: 600;
+    color: #58a6ff;
+}
+
+.metric-card .label {
+    font-size: 0.72rem;
+    color: #8b949e;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-top: 0.25rem;
+}
+
+/* Footer */
+.footer {
+    font-size: 0.7rem;
+    color: #30363d;
+    font-family: 'IBM Plex Mono', monospace;
+    margin-top: 3rem;
+    padding-top: 1rem;
+    border-top: 1px solid #21262d;
+    text-align: center;
+}
