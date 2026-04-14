@@ -1,0 +1,9 @@
+Duración del proyecto (Estaría guay calendario con días exactos)
+Toneladas por año
+Numero de buques
+Tipo de carga
+Servicios (carga /descrgar / aduana)
+Inversión en equipos (grúas / infra / equipos) el que pone la empresa (sin importar de donde venga)
+Financión (tanto de capital propio como de pasta de fuera)
+
+Output es una cuenta de pérdidas y ganancias
