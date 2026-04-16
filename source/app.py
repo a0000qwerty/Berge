@@ -544,7 +544,9 @@ def main():
         # TIR
         try:
             tir = calcular_tir(flujos)
-        except OverflowError:
+            if tir is None:
+                raise Exception
+        except Exception:
             tir = 0.055
 
         # Guardar en session_state para acceso desde col_summary
