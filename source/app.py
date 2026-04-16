@@ -2,6 +2,10 @@ import streamlit as st
 from pathlib import Path
 from dotenv import load_dotenv
 import os
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
+import io
 
 # ── Configuración de página ──────────────────────────────────────────────────
 st.set_page_config(
@@ -51,6 +55,224 @@ def coste_total_equipos():
 
 def coste_total_servicios():
     return sum(s["precio"] for s in st.session_state.servicios)
+
+def calcular_tir(flujos, guess=0.1, max_iter=1000, tol=1e-6):
+    r = guess
+    for _ in range(max_iter):
+        npv  = sum(fc / (1 + r) ** t for t, fc in enumerate(flujos))
+        dnpv = sum(-t * fc / (1 + r) ** (t + 1) for t, fc in enumerate(flujos))
+        if dnpv == 0:
+            return None
+        r_new = r - npv / dnpv
+        if abs(r_new - r) < tol:
+            return r_new
+        r = r_new
+    return None
+
+def generar_excel(params: dict) -> bytes:
+    """Genera el modelo financiero en Excel y devuelve los bytes."""
+    wb = Workbook()
+
+    # ── Estilos ──────────────────────────────────────────────────────────────
+    azul       = Font(color="0000FF", bold=False)           # inputs
+    negro      = Font(color="000000")                       # fórmulas
+    blanco     = Font(color="FFFFFF", bold=True)
+    cabecera_f = PatternFill("solid", start_color="1F3864") # azul oscuro
+    input_f    = PatternFill("solid", start_color="EBF3FB")
+    result_f   = PatternFill("solid", start_color="E2EFDA")
+    neg_f      = PatternFill("solid", start_color="FCE4D6")
+    gris_f     = PatternFill("solid", start_color="F2F2F2")
+    centro     = Alignment(horizontal="center", vertical="center")
+    derecha    = Alignment(horizontal="right")
+    borde_fino = Border(
+        left=Side(style="thin"), right=Side(style="thin"),
+        top=Side(style="thin"),  bottom=Side(style="thin")
+    )
+    fmt_eur  = '€#,##0;(€#,##0);"-"'
+    fmt_pct  = '0.00%'
+    fmt_anio = '@'   # texto
+
+    def cab(ws, fila, col, texto):
+        c = ws.cell(fila, col, texto)
+        c.font = blanco; c.fill = cabecera_f
+        c.alignment = centro; c.border = borde_fino
+
+    def inp(ws, fila, col, valor, fmt=None):
+        c = ws.cell(fila, col, valor)
+        c.font = azul; c.fill = input_f
+        c.border = borde_fino; c.alignment = derecha
+        if fmt: c.number_format = fmt
+
+    def cal(ws, fila, col, formula, fmt=None, positivo=True):
+        c = ws.cell(fila, col, formula)
+        c.font = negro
+        c.fill = result_f if positivo else neg_f
+        c.border = borde_fino; c.alignment = derecha
+        if fmt: c.number_format = fmt
+
+    def etq(ws, fila, col, texto, bold=False):
+        c = ws.cell(fila, col, texto)
+        c.font = Font(bold=bold); c.fill = gris_f
+        c.border = borde_fino
+
+    n   = int(params["años_proyecto"])
+    kd  = params["tipo_interes"] / 100
+    cap = params["capital_externo"]
+
+    # ════════════════════════════════════════════════════════════════════════
+    # HOJA 1 · SUPUESTOS
+    # ════════════════════════════════════════════════════════════════════════
+    ws1 = wb.active
+    ws1.title = "Supuestos"
+    ws1.column_dimensions["A"].width = 36
+    ws1.column_dimensions["B"].width = 22
+
+    cab(ws1, 1, 1, "PARÁMETRO");  cab(ws1, 1, 2, "VALOR")
+
+    filas_sup = [
+        ("Duración del proyecto (años)",          params["años_proyecto"],          None),
+        ("Toneladas manejadas al año",             params["toneladas_anuales"],      '#,##0'),
+        ("Número de buques",                       params["num_buques"],             '#,##0'),
+        ("Tipo de carga",                          params["tipo_carga"],             None),
+        ("Coste total servicios (€)",              params["coste_servicios"],        fmt_eur),
+        ("Coste total equipos (€)",                params["coste_equipos"],          fmt_eur),
+        ("Inversión total (€)",                    params["coste_total"],            fmt_eur),
+        ("% Financiación externa",                 params["pct_financiacion"] / 100, fmt_pct),
+        ("Capital propio (€)",                     params["capital_propio"],         fmt_eur),
+        ("Capital externo (€)",                    params["capital_externo"],        fmt_eur),
+        ("Tipo de interés anual (%)",              params["tipo_interes"] / 100,     fmt_pct),
+        ("Plazo amortización (años)",              params["plazo_amortizacion"],     None),
+        ("Período de carencia (años)",             params["periodo_carencia"],       None),
+        ("Tipo de amortización",                   params["tipo_amortizacion"],      None),
+        ("WACC (%)",                               params["wacc_input"] / 100,       fmt_pct),
+        ("Ingreso por tonelada (€/t)",             params["ingreso_por_tonelada"],   fmt_eur),
+        ("Coste operativo por tonelada (€/t)",     params["coste_opex_tonelada"],    fmt_eur),
+        ("Valor residual (€)",                     params["valor_residual"],         fmt_eur),
+    ]
+    for i, (etiqueta, valor, fmt) in enumerate(filas_sup, start=2):
+        etq(ws1, i, 1, etiqueta)
+        inp(ws1, i, 2, valor, fmt)
+
+    # ════════════════════════════════════════════════════════════════════════
+    # HOJA 2 · FLUJOS DE CAJA
+    # ════════════════════════════════════════════════════════════════════════
+    ws2 = wb.create_sheet("Flujos de Caja")
+    ws2.column_dimensions["A"].width = 32
+
+    # Cabecera años
+    cab(ws2, 1, 1, "CONCEPTO")
+    for yr in range(n + 1):
+        col = yr + 2
+        ws2.column_dimensions[get_column_letter(col)].width = 16
+        cab(ws2, 1, col, f"Año {yr}" if yr > 0 else "Año 0")
+
+    # Filas del modelo
+    conceptos = [
+        "Ingresos brutos (€)",
+        "Costes operativos OPEX (€)",
+        "EBITDA (€)",
+        "Servicio de la deuda (€)",
+        "Flujo de caja operativo (€)",
+        "Valor residual (€)",
+        "Inversión inicial / FC neto (€)",
+        "Flujo de caja acumulado (€)",
+        "Factor de descuento",
+        "Flujo de caja descontado (€)",
+    ]
+    for i, concepto in enumerate(conceptos, start=2):
+        etq(ws2, i, 1, concepto, bold=(concepto in ("EBITDA (€)", "Flujo de caja operativo (€)", "Inversión inicial / FC neto (€)")))
+
+    # Calcular cuota anual igual que en la app
+    cuota = params["cuota_anual"]
+
+    for yr in range(n + 1):
+        col = yr + 2
+        es_ultimo = (yr == n)
+        positivo = True
+
+        if yr == 0:
+            # Año 0: solo inversión inicial
+            ws2.cell(2, col, 0).number_format = fmt_eur           # ingresos
+            ws2.cell(3, col, 0).number_format = fmt_eur           # opex
+            ws2.cell(4, col, 0).number_format = fmt_eur           # ebitda
+            ws2.cell(5, col, 0).number_format = fmt_eur           # deuda
+            ws2.cell(6, col, 0).number_format = fmt_eur           # fc operativo
+            ws2.cell(7, col, 0).number_format = fmt_eur           # residual
+            cal(ws2, 8, col, f"=-{params['capital_propio']}", fmt_eur, False)  # fc neto año 0
+            cal(ws2, 9, col, f"={get_column_letter(col)}8", fmt_eur, False)    # acumulado
+            cal(ws2, 10, col, 1.0, "0.0000")                                   # factor descuento
+            cal(ws2, 11, col, f"={get_column_letter(col)}8*{get_column_letter(col)}10", fmt_eur, False)
+        else:
+            ing  = params["ingreso_anual"]
+            opex = params["opex_anual"]
+            ebit = ing - opex
+            resid = params["valor_residual"] if es_ultimo else 0.0
+            fc_op = ebit - cuota
+            fc_neto = fc_op + resid
+            wacc = params["wacc"]
+            factor = 1 / (1 + wacc) ** yr
+
+            cal(ws2,  2, col, ing,    fmt_eur)
+            cal(ws2,  3, col, opex,   fmt_eur, False)
+            cal(ws2,  4, col, ebit,   fmt_eur, ebit >= 0)
+            cal(ws2,  5, col, cuota,  fmt_eur, False)
+            cal(ws2,  6, col, fc_op,  fmt_eur, fc_op >= 0)
+            cal(ws2,  7, col, resid,  fmt_eur)
+            cal(ws2,  8, col, fc_neto, fmt_eur, fc_neto >= 0)
+            prev_col = get_column_letter(col - 1)
+            cur_col  = get_column_letter(col)
+            cal(ws2,  9, col, f"={prev_col}9+{cur_col}8", fmt_eur, fc_neto >= 0)
+            cal(ws2, 10, col, round(factor, 6), "0.0000")
+            cal(ws2, 11, col, round(fc_neto * factor, 2), fmt_eur, fc_neto >= 0)
+
+    # Para los años 0..n aplica borde a las celdas vacías de año 0
+    for r in range(2, 12):
+        for yr in range(n + 1):
+            c = ws2.cell(r, yr + 2)
+            c.border = borde_fino
+            if c.value is None:
+                c.value = 0
+                c.number_format = fmt_eur
+
+    # ════════════════════════════════════════════════════════════════════════
+    # HOJA 3 · RESULTADOS
+    # ════════════════════════════════════════════════════════════════════════
+    ws3 = wb.create_sheet("Resultados")
+    ws3.column_dimensions["A"].width = 36
+    ws3.column_dimensions["B"].width = 22
+
+    cab(ws3, 1, 1, "INDICADOR"); cab(ws3, 1, 2, "VALOR")
+
+    tir = params["tir"]
+    van = params["van"]
+    tir_str = f"{tir*100:.2f}%" if tir is not None and -1 < tir < 100 else "N/D"
+
+    resultados = [
+        ("VAN (€)",                   van,                         fmt_eur),
+        ("TIR (%)",                   (tir or 0),                  fmt_pct),
+        ("WACC (%)",                  params["wacc_input"] / 100,  fmt_pct),
+        ("Diferencial TIR - WACC",    ((tir or 0) - params["wacc"]), fmt_pct),
+        ("Ingresos anuales (€)",      params["ingreso_anual"],      fmt_eur),
+        ("OPEX anual (€)",            params["opex_anual"],         fmt_eur),
+        ("EBITDA anual (€)",          params["ebitda_anual"],       fmt_eur),
+        ("Cuota anual préstamo (€)",  cuota,                        fmt_eur),
+        ("Flujo de caja anual (€)",   params["flujo_caja_anual"],   fmt_eur),
+        ("Valor residual (€)",        params["valor_residual"],     fmt_eur),
+    ]
+    for i, (etiqueta, valor, fmt) in enumerate(resultados, start=2):
+        etq(ws3, i, 1, etiqueta)
+        c = ws3.cell(i, 2, valor)
+        c.font = negro
+        es_positivo = isinstance(valor, (int, float)) and valor >= 0
+        c.fill = result_f if es_positivo else neg_f
+        c.border = borde_fino; c.alignment = derecha
+        if fmt: c.number_format = fmt
+
+    # Guardar en buffer
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf.getvalue()
 
 
 # ── HEADER ────────────────────────────────────────────────────────────────────
@@ -272,6 +494,14 @@ def main():
                 help="Coste variable de operación por tonelada (personal, energía, mantenimiento...)."
             )
 
+        cr4, _ = st.columns([1, 2])
+        with cr4:
+            valor_residual = st.number_input(
+                "Valor residual al final del proyecto (€)",
+                min_value=0.0, value=0.0, step=1000.0, format="%.2f",
+                help="Valor de liquidación estimado de los activos al término del proyecto."
+            )
+
         # ── Cálculo del flujo de caja simplificado ────────────────────────────────
         wacc = wacc_input / 100
         ingreso_anual = ingreso_por_tonelada * toneladas_anuales
@@ -296,6 +526,44 @@ def main():
             cuota_anual = 0.0
 
         flujo_caja_anual = ebitda_anual - cuota_anual
+
+        # Serie de flujos de caja para VAN y TIR:
+        # Año 0: -capital_propio (desembolso del inversor)
+        # Años 1..n: flujo_caja_anual
+        # Año n: + valor_residual
+        flujos = [-capital_propio]
+        for yr in range(1, int(años_proyecto) + 1):
+            fc = flujo_caja_anual
+            if yr == int(años_proyecto):
+                fc += valor_residual
+            flujos.append(fc)
+
+        # VAN
+        van = sum(fc / (1 + wacc) ** t for t, fc in enumerate(flujos))
+
+        # TIR
+        try:
+            tir = calcular_tir(flujos)
+        except OverflowError:
+            tir = 0.055
+
+        # Guardar en session_state para acceso desde col_summary
+        st.session_state["_calc"] = dict(
+            van=van, tir=tir, wacc=wacc, wacc_input=wacc_input,
+            ingreso_anual=ingreso_anual, opex_anual=opex_anual,
+            ebitda_anual=ebitda_anual, cuota_anual=cuota_anual,
+            flujo_caja_anual=flujo_caja_anual, flujos=flujos,
+            ingreso_por_tonelada=ingreso_por_tonelada,
+            coste_opex_tonelada=coste_opex_tonelada,
+            valor_residual=valor_residual,
+            años_proyecto=años_proyecto, toneladas_anuales=toneladas_anuales,
+            num_buques=num_buques, tipo_carga=tipo_carga,
+            coste_servicios=coste_total_servicios(), coste_equipos=coste_total_equipos(),
+            coste_total=coste_total, capital_propio=capital_propio,
+            capital_externo=capital_externo, pct_financiacion=pct_financiacion,
+            tipo_interes=tipo_interes, plazo_amortizacion=plazo_amortizacion,
+            periodo_carencia=periodo_carencia, tipo_amortizacion=tipo_amortizacion,
+        )
 
         # Métricas resumen
         cm1, cm2, cm3 = st.columns(3)
@@ -423,8 +691,11 @@ def main():
         st.markdown("<hr>", unsafe_allow_html=True)
         st.markdown('<div class="section-label">Resultados Financieros</div>', unsafe_allow_html=True)
 
-        tir = 0.05
-        van = 157648
+        # Leer cálculos desde session_state
+        _c = st.session_state.get("_calc", {})
+        van = _c.get("van", 0)
+        tir = _c.get("tir", None)
+        wacc = _c.get("wacc", wacc_input / 100)
 
         # Formateo TIR
         if tir is not None and -1 < tir < 100:
@@ -451,6 +722,18 @@ def main():
             <div class="summary-label">{tir_label}</div>
         </div>
         """, unsafe_allow_html=True)
+
+        # ── Botón descarga Excel ──────────────────────────────────────────────────
+        st.markdown("<hr>", unsafe_allow_html=True)
+        if _c:
+            excel_bytes = generar_excel(_c)
+            st.download_button(
+                label="⬇ Descargar modelo Excel",
+                data=excel_bytes,
+                file_name="modelo_financiero_portuario.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
 
 
     # ── FOOTER ────────────────────────────────────────────────────────────────────
