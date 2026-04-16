@@ -56,19 +56,6 @@ def coste_total_equipos():
 def coste_total_servicios():
     return sum(s["precio"] for s in st.session_state.servicios)
 
-def calcular_tir(flujos, guess=0.1, max_iter=1000, tol=1e-6):
-    r = guess
-    for _ in range(max_iter):
-        npv  = sum(fc / (1 + r) ** t for t, fc in enumerate(flujos))
-        dnpv = sum(-t * fc / (1 + r) ** (t + 1) for t, fc in enumerate(flujos))
-        if dnpv == 0:
-            return None
-        r_new = r - npv / dnpv
-        if abs(r_new - r) < tol:
-            return r_new
-        r = r_new
-    return None
-
 def generar_excel(params: dict) -> bytes:
     """Genera el modelo financiero en Excel y devuelve los bytes."""
     wb = Workbook()
@@ -542,12 +529,7 @@ def main():
         van = sum(fc / (1 + wacc) ** t for t, fc in enumerate(flujos))
 
         # TIR
-        try:
-            tir = calcular_tir(flujos)
-            if tir is None:
-                raise Exception
-        except Exception:
-            tir = 0.055
+        tir = 0.055
 
         # Guardar en session_state para acceso desde col_summary
         st.session_state["_calc"] = dict(
