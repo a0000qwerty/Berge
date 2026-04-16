@@ -14,7 +14,10 @@ def load_css(path: str):
     with open(path) as f:
         st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
-load_css("./assets/styles.css")
+try:
+    load_css("./assets/styles.css")
+except Exception:
+    load_css("source/assets/styles.css")
 
 
 # ── Inicialización del estado ─────────────────────────────────────────────────
