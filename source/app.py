@@ -52,7 +52,10 @@ def coste_total_servicios():
 
 
 # ── HEADER ────────────────────────────────────────────────────────────────────
-st.logo("assets/logo.png")
+try:
+    st.logo("assets/logo.png")
+except:
+    st.logo("source/assets/logo.png")
 st.markdown("""
 <div class="main-header">
     <h1>ANÁLISIS FINANCIERO PORTUARIO</h1>
